@@ -1,0 +1,3 @@
+This is a codebase with design files and software to create and use a custom olfactometer. The board uses a series of mass flow controllers and valves to pass air through odor-filled vials, which are then passed to a mouse for a variety of behavioral tests. 
+
+The primary relevance of this codebase to me is the teensy code in Software-Teensy. That implements the high-level control elements of the olfactometer. 

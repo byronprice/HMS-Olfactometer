@@ -3,8 +3,8 @@
 
 // Define Carrier/Odor MFC numbers
 // NOTE: The PCB connector (MFC-1..4) determines the MFC number
-const int CARRIER_MFC = 1;
-const int ODOR_MFC = 2;
+const int CARRIER_MFC = 2;
+const int ODOR_MFC = 1;
 
 
 void setup() {
@@ -28,55 +28,55 @@ void setup() {
 void loop() {
 
   // Option 1) Act on USB commands:
-  // readFromUSB();
+  readFromUSB();
 
   // Option 2) Or just put your main code directly here, to run repeatedly:
   // Typically used for troubleshooting
 
-  delay(1000);
-  Serial.println("Turning Odor-1 On/Off");
-  activateOdorValve(1);
-  delay(500);
-  deactivateOdorValve(1);
-  delay(500);
-  Serial.println("Turning Aux-1 On/Off");
-  activateAuxValve(1);
-  delay(500);
-  deactivateAuxValve(1);
+  // delay(1000);
+  // Serial.println("Turning Odor-1 On/Off");
+  // activateOdorValve(1);
+  // delay(500);
+  // deactivateOdorValve(1);
+  // delay(500);
+  // Serial.println("Turning Aux-1 On/Off");
+  // activateAuxValve(1);
+  // delay(500);
+  // deactivateAuxValve(1);
 
 
-  delay(1000);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(ODOR_MFC));
-  delay(1000);
-  setMFCFlowRate(ODOR_MFC, 1.5); delay(150);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(ODOR_MFC));
-  delay(1000);
-  setMFCFlowRate(ODOR_MFC, 2.5); delay(150);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(ODOR_MFC));
-  delay(1000);
-  setMFCFlowRate(ODOR_MFC, 0); delay(150);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(ODOR_MFC));
+  // delay(1000);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(ODOR_MFC));
+  // delay(1000);
+  // setMFCFlowRate(ODOR_MFC, 1.5); delay(150);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(ODOR_MFC));
+  // delay(1000);
+  // setMFCFlowRate(ODOR_MFC, 2.5); delay(150);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(ODOR_MFC));
+  // delay(1000);
+  // setMFCFlowRate(ODOR_MFC, 0); delay(150);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(ODOR_MFC));
 
 
-  delay(1000);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(CARRIER_MFC));
-  delay(1000);
-  setMFCFlowRate(CARRIER_MFC, 1.5); delay(150);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(CARRIER_MFC));
-  delay(1000);
-  setMFCFlowRate(CARRIER_MFC, 2.5); delay(150);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(CARRIER_MFC));
-  delay(1000);
-  setMFCFlowRate(CARRIER_MFC, 0); delay(150);
-  Serial.print("Flow: ");
-  Serial.println(getMFCFlowRate(CARRIER_MFC));
+  // delay(1000);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(CARRIER_MFC));
+  // delay(1000);
+  // setMFCFlowRate(CARRIER_MFC, 1.5); delay(150);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(CARRIER_MFC));
+  // delay(1000);
+  // setMFCFlowRate(CARRIER_MFC, 2.5); delay(150);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(CARRIER_MFC));
+  // delay(1000);
+  // setMFCFlowRate(CARRIER_MFC, 0); delay(150);
+  // Serial.print("Flow: ");
+  // Serial.println(getMFCFlowRate(CARRIER_MFC));
 
 
 }

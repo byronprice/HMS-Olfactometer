@@ -7,7 +7,7 @@
 #include <Wire.h>
 #include <Adafruit_MCP23X08.h>
 
-const bool DEBUG = false;
+const bool DEBUG = true;
 
 // =================================
 // Pin Assignments for PCB v 4.0
