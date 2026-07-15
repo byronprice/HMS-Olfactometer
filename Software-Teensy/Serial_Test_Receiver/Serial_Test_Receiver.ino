@@ -10,9 +10,19 @@ void setup() {
   Serial.begin(115200);   // USB: for printing acknowledgments
   Serial3.begin(115200);  // RX on pin 15 (BNC3)
   Serial.println("Receiver ready.");
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
 }
 
 void loop() {
+
   while (Serial3.available()) {
     char c = Serial3.read();
     if (c == '\n' || c == ';') {
