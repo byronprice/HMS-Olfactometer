@@ -22,6 +22,10 @@ void setup() {
   // Initialize valves.
   // This command will determine which IO-expander chips are wired up.
   InitializeValves();
+
+  // Set up BNC1 as a digital output.
+  pinMode(BNC1_pin, OUTPUT);
+  digitalWrite(BNC1_pin, LOW);
 }
 
 
@@ -201,6 +205,15 @@ void interpretUSBMessage(String message) {
       break;
 
 
+
+    // B: pulse [B]NC1 high for 1 second
+    case 'B':
+    case 'b':
+      digitalWrite(BNC1_pin, HIGH);
+      delay(1000);
+      digitalWrite(BNC1_pin, LOW);
+      Serial.println("BNC1 pulsed high for 1 second");
+      break;
 
     // otherwise: error
     default:
