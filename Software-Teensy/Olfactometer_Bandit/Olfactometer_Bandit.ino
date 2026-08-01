@@ -11,14 +11,23 @@ const int ODOR_MFC = 1;
 const int bankOdor[3]  = {17, 1, 9};
 const int bankBlank[3] = {18, 2, 10};
 
+const float odor_flow_rate = 4.5;
+
 int activeBankNumber = -1;
 unsigned long previousValveTimer = 0;
 bool isValveCurrentlyOpen = false;
-const unsigned long valveOnDuration  = 2000;  // 2 seconds ON
-const unsigned long valveOffDuration = 500;   // 0.5 seconds OFF
+const unsigned long valveOnMin  = 1000;  // ms
+const unsigned long valveOnMax  = 3000;  // ms
+// OFF is always ON/4, preserving the 4:1 ratio
+
+unsigned long valveOnDuration  = 2000;
+unsigned long valveOffDuration = 500;
 
 
 void setup() {
+  delay(500);  // allow I2C peripherals to power up before scanning
+  randomSeed(micros());
+
   Serial3.begin(115200);
 
   setupMFC(ODOR_MFC);
@@ -26,6 +35,12 @@ void setup() {
 
   pinMode(BNC1_pin, OUTPUT);
   digitalWrite(BNC1_pin, LOW);
+
+  // Ensure known state: all valves closed on boot
+  for (int i = 0; i < 3; i++) {
+    deactivateOdorValve(bankOdor[i]);
+    deactivateOdorValve(bankBlank[i]);
+  }
 
   if (DEBUG) {
     Serial.begin(115200);
@@ -64,27 +79,36 @@ void handleValvePulsing() {
   } else {
     // Blank is ON — check if time to switch to odor
     if (currentMillis - previousValveTimer >= valveOffDuration) {
+      valveOnDuration  = random(valveOnMin, valveOnMax + 1);
+      valveOffDuration = valveOnDuration / 4;
       activateOdorValve(bankOdor[activeBankNumber]);
       deactivateOdorValve(bankBlank[activeBankNumber]);
       isValveCurrentlyOpen = true;
       previousValveTimer = currentMillis;
-      if (DEBUG) Serial.println("Pulse ON (odor open)");
+      if (DEBUG) {
+        Serial.print("Pulse ON (odor open) — ON=");
+        Serial.print(valveOnDuration);
+        Serial.print("ms OFF=");
+        Serial.print(valveOffDuration);
+        Serial.println("ms");
+      }
     }
   }
 }
 
 
 void readFromSender() {
-  static String incomingMessage = "";
+  static char buf[64];
+  static int idx = 0;
 
-  if (Serial3.available() > 0) {
+  while (Serial3.available() > 0) {
     char inByte = Serial3.read();
-
-    if ((inByte == '\n') || (inByte == ';')){
-      interpretMessage(incomingMessage);
-      incomingMessage = "";
-    } else {
-      incomingMessage = incomingMessage + inByte;
+    if (inByte == '\n' || inByte == ';') {
+      buf[idx] = '\0';
+      interpretMessage(String(buf));
+      idx = 0;
+    } else if (idx < 63) {
+      buf[idx++] = inByte;
     }
   }
 }
@@ -206,6 +230,34 @@ void interpretMessage(String message) {
         Serial.print("Closed odor valve: ");
         Serial.println(arg1);
       }
+      break;
+
+    case 'G':
+    case 'g':
+      // Start: open all blank valves, close all odor valves
+      for (int i = 0; i < 3; i++) {
+        activateOdorValve(bankBlank[i]);
+        deactivateOdorValve(bankOdor[i]);
+      }
+      activeBankNumber = -1;
+      isValveCurrentlyOpen = false;
+      setMFCFlowRate(ODOR_MFC, odor_flow_rate);
+      // pulseBNC();
+      if (DEBUG) Serial.println("START: all blank valves open.");
+      break;
+
+    case 'S':
+    case 's':
+      // Stop: close all odor and blank valves, halt pulsing
+      setMFCFlowRate(ODOR_MFC, 0.0);
+      for (int i = 0; i < 3; i++) {
+        deactivateOdorValve(bankOdor[i]);
+        deactivateOdorValve(bankBlank[i]);
+      }
+      activeBankNumber = -1;
+      isValveCurrentlyOpen = false;
+      // pulseBNC();
+      if (DEBUG) Serial.println("STOP: all valves closed.");
       break;
 
     case 'B':
