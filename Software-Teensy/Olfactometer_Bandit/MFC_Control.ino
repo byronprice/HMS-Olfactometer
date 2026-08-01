@@ -31,9 +31,11 @@ static char errorMessage[64];
 static int16_t error;
 
 void PrintUint64(uint64_t& value) {
-    Serial.print("0x");
-    Serial.print((uint32_t)(value >> 32), HEX);
-    Serial.print((uint32_t)(value & 0xFFFFFFFF), HEX);
+    if (DEBUG) {
+        Serial.print("0x");
+        Serial.print((uint32_t)(value >> 32), HEX);
+        Serial.print((uint32_t)(value & 0xFFFFFFFF), HEX);
+    }
 }
 
 void setupMFC(uint8_t MFCNum) { // MFCNum is 1-based
@@ -60,7 +62,7 @@ void setupMFC(uint8_t MFCNum) { // MFCNum is 1-based
 	} else if (MFCNum==4) {
 		addr = SFC6000_I2C_ADDR_21;
 	} else {
-		Serial.println("ERROR: Bad MFC number");
+		if (DEBUG) Serial.println("ERROR: Bad MFC number");
 		return;
 	}
 
@@ -71,25 +73,28 @@ void setupMFC(uint8_t MFCNum) { // MFCNum is 1-based
     error = MFC[MFCNum-1].readProductIdentifier(productIdentifier, serialNumber);
     if (error != NO_ERROR) {
         MFCFound[MFCNum-1] = false;
-        Serial.print("Cannot connect to MFC ");
-        Serial.print(MFCNum);
-        Serial.print("   ### ");
-        // Serial.print("Error trying to execute readProductIdentifier(): ");
-        errorToString(error, errorMessage, sizeof errorMessage);
-        Serial.print(errorMessage);
-        Serial.println(" ###");
+        if (DEBUG) {
+            Serial.print("Cannot connect to MFC ");
+            Serial.print(MFCNum);
+            Serial.print("   ### ");
+            errorToString(error, errorMessage, sizeof errorMessage);
+            Serial.print(errorMessage);
+            Serial.println(" ###");
+        }
         return;
     }
     MFCFound[MFCNum-1] = true;
-    Serial.print("Found MFC ");
-    Serial.print(MFCNum);
-    Serial.print("    (");
-    Serial.print("productIdentifier: ");
-    Serial.print(productIdentifier);
-    Serial.print("\t");
-    Serial.print("serialNumber: ");
-    PrintUint64(serialNumber);
-    Serial.println(")");
+    if (DEBUG) {
+        Serial.print("Found MFC ");
+        Serial.print(MFCNum);
+        Serial.print("    (");
+        Serial.print("productIdentifier: ");
+        Serial.print(productIdentifier);
+        Serial.print("\t");
+        Serial.print("serialNumber: ");
+        PrintUint64(serialNumber);
+        Serial.println(")");
+    }
 
     startContinuousMeasurement(MFCNum);
     return;
@@ -98,12 +103,14 @@ void setupMFC(uint8_t MFCNum) { // MFCNum is 1-based
 bool startContinuousMeasurement(uint8_t MFCNum) {
     error = MFC[MFCNum-1].startAirContinuousMeasurement();
     if (error != NO_ERROR) {
-        Serial.print("MFC ");
-        Serial.print(MFCNum);
-        Serial.print(": Error starting continuous measurement:  ### ");
-        errorToString(error, errorMessage, sizeof errorMessage);
-        Serial.print(errorMessage);
-        Serial.println(" ###");
+        if (DEBUG) {
+            Serial.print("MFC ");
+            Serial.print(MFCNum);
+            Serial.print(": Error starting continuous measurement:  ### ");
+            errorToString(error, errorMessage, sizeof errorMessage);
+            Serial.print(errorMessage);
+            Serial.println(" ###");
+        }
         return true;
     }
     return false;
@@ -111,19 +118,23 @@ bool startContinuousMeasurement(uint8_t MFCNum) {
 
 float getMFCFlowRate(uint8_t MFCNum) {
     if (!MFCFound[MFCNum-1]) {
-        Serial.print("MFC ");
-        Serial.print(MFCNum);
-        Serial.println(" is not connected/initialized.");
+        if (DEBUG) {
+            Serial.print("MFC ");
+            Serial.print(MFCNum);
+            Serial.println(" is not connected/initialized.");
+        }
         return -1;
     }
     float aFlow = 0.0;
     error = MFC[MFCNum-1].readFlow(aFlow);
     if (error != NO_ERROR) {
-        Serial.print("Error trying to execute readFlow(): ");
-        errorToString(error, errorMessage, sizeof errorMessage);
-        Serial.println(errorMessage);
-        Serial.println("This can happen when air flow is blocked and MFC flow setting is >0.");
-        Serial.println("Make sure MFC has input pressure, check for blockage, and then restart 'continuous measurement' mode on MFC.");
+        if (DEBUG) {
+            Serial.print("Error trying to execute readFlow(): ");
+            errorToString(error, errorMessage, sizeof errorMessage);
+            Serial.println(errorMessage);
+            Serial.println("This can happen when air flow is blocked and MFC flow setting is >0.");
+            Serial.println("Make sure MFC has input pressure, check for blockage, and then restart 'continuous measurement' mode on MFC.");
+        }
         return -1;
     }
     return(aFlow);
@@ -131,23 +142,29 @@ float getMFCFlowRate(uint8_t MFCNum) {
 
 bool setMFCFlowRate(uint8_t MFCNum, float targetFlowRate_LPM) {
     if (!MFCFound[MFCNum-1]) {
-        Serial.print("MFC ");
-        Serial.print(MFCNum);
-        Serial.println(" is not connected/initialized.");
+        if (DEBUG) {
+            Serial.print("MFC ");
+            Serial.print(MFCNum);
+            Serial.println(" is not connected/initialized.");
+        }
         return true;
     }
     if (targetFlowRate_LPM<0) {
-        Serial.println("Error: Flow rate must be 0 or greater");
+        if (DEBUG) Serial.println("Error: Flow rate must be 0 or greater");
         return true;
     }
-    Serial.print("Set flow rate to ");
-    Serial.print(targetFlowRate_LPM);
-    Serial.println(" LPM");
+    if (DEBUG) {
+        Serial.print("Set flow rate to ");
+        Serial.print(targetFlowRate_LPM);
+        Serial.println(" LPM");
+    }
     error = MFC[MFCNum-1].updateSetpoint(targetFlowRate_LPM);
     if (error != NO_ERROR) {
-        Serial.print("Error: ");
-        errorToString(error, errorMessage, sizeof errorMessage);
-        Serial.println(errorMessage);
+        if (DEBUG) {
+            Serial.print("Error: ");
+            errorToString(error, errorMessage, sizeof errorMessage);
+            Serial.println(errorMessage);
+        }
         return true;
     }
     return false;

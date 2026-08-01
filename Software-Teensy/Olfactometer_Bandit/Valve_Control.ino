@@ -35,8 +35,10 @@ void InitializeValves() {
 		bool success = GPIO_Expander[bankNum].begin_I2C(0x20+bankNum);  	// adresses are 0x20 - 0x27
 		ValveBanksFound[bankNum] = success;
 		if (success) {
-			Serial.print("Found valve bank ");
-			Serial.println(bankNum+1);
+			if (DEBUG) {
+				Serial.print("Found valve bank ");
+				Serial.println(bankNum+1);
+			}
 			// set all pins to output mode
 			for (uint8_t chanNum=0; chanNum<8; chanNum++) {
 				GPIO_Expander[bankNum].pinMode(chanNum, OUTPUT);
@@ -48,7 +50,7 @@ void InitializeValves() {
 
 bool activateOdorValve(uint8_t odorValveNum) { // odorValveNum is 1-based
 	if ((odorValveNum == 0) || (odorValveNum > MAX_NUM_ODOR_VALVES)) {
-		Serial.println("ERROR: Odor valve number must be in range 1-48");
+		if (DEBUG) Serial.println("ERROR: Odor valve number must be in range 1-48");
 		return true;
 	}
 	bool error = activateValve_core(odorValveNum-1);
@@ -57,7 +59,7 @@ bool activateOdorValve(uint8_t odorValveNum) { // odorValveNum is 1-based
 
 bool deactivateOdorValve(uint8_t odorValveNum) { // odorValveNum is 1-based
 	if ((odorValveNum == 0) || (odorValveNum > MAX_NUM_ODOR_VALVES)) {
-		Serial.println("ERROR: Odor valve number must be in range 1-48");
+		if (DEBUG) Serial.println("ERROR: Odor valve number must be in range 1-48");
 		return true;
 	}
 	bool error = deactivateValve_core(odorValveNum-1);
@@ -66,7 +68,7 @@ bool deactivateOdorValve(uint8_t odorValveNum) { // odorValveNum is 1-based
 
 bool activateAuxValve(uint8_t auxValveNum) { // auxValveNum is 1-based
 	if ((auxValveNum == 0) || (auxValveNum > MAX_NUM_AUX_VALVES)) {
-		Serial.println("ERROR: Aux valve number must be in range 1-8");
+		if (DEBUG) Serial.println("ERROR: Aux valve number must be in range 1-8");
 		return true;
 	}
 	bool error = activateValve_core(auxValveNum + MAX_NUM_ODOR_VALVES - 1);
@@ -75,7 +77,7 @@ bool activateAuxValve(uint8_t auxValveNum) { // auxValveNum is 1-based
 
 bool deactivateAuxValve(uint8_t auxValveNum) { // auxValveNum is 1-based
 	if ((auxValveNum == 0) || (auxValveNum > MAX_NUM_AUX_VALVES)) {
-		Serial.println("ERROR: Aux valve number must be in range 1-8");
+		if (DEBUG) Serial.println("ERROR: Aux valve number must be in range 1-8");
 		return true;
 	}
 	bool error = deactivateValve_core(auxValveNum + MAX_NUM_ODOR_VALVES - 1);
@@ -103,8 +105,10 @@ bool activateValve_core(uint8_t rawValveNum) { // rawValveNum is 0-based
 			Serial.println(chanNum);
 		}
 	} else {
-		Serial.print("ERROR: Cannot find valve bank");
-		Serial.println(bankNum);
+		if (DEBUG) {
+			Serial.print("ERROR: Cannot find valve bank");
+			Serial.println(bankNum);
+		}
 		error = true;
 	}
 	return(error);
@@ -123,8 +127,10 @@ bool deactivateValve_core(uint8_t rawValveNum) { // rawValveNum is 0-based
 			Serial.println(chanNum);
 		}
 	} else {
-		Serial.print("ERROR: Cannot find valve bank");
-		Serial.println(bankNum);
+		if (DEBUG) {
+			Serial.print("ERROR: Cannot find valve bank");
+			Serial.println(bankNum);
+		}
 		error = true;
 	}
 	return(error);
