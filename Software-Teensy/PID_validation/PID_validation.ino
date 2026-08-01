@@ -1,13 +1,22 @@
-
 const bool DEBUG = true;
 
 #include "Olfactometer_header.h"
+
+//1 min
+//15s
+//1 min
 
 // Define Carrier/Odor MFC numbers
 // NOTE: The PCB connector (MFC-1..4) determines the MFC number
 // const int CARRIER_MFC = 2;
 const int ODOR_MFC = 1;
 
+bool isSequenceActive = false;
+unsigned long sequenceStartTime = 0;
+const unsigned long SEQUENCE_DURATION = 15000;
+
+const int odor_valve = 1;
+const int neutral_valve = 2;
 
 void setup() {
   if (DEBUG) {
@@ -17,36 +26,27 @@ void setup() {
     }
   }
 
-  // Set up MFCs.
-  // Run for each MFC connected to the board.
-  // NOTE: The PCB connector (MFC-1..4) determines the MFC number
-  // setupMFC(CARRIER_MFC);
   setupMFC(ODOR_MFC);
-
-  // Initialize valves.
-  // This command will determine which IO-expander chips are wired up.
   InitializeValves();
 
-  // Set up built-in LED as a status indicator.
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
 
-  // Set up Serial3 on BNC3 (pin 15, RX) and BNC4 (pin 14, TX)
-  // for hardware serial communication with the maze Teensy 4.1.
+  // Assumes BNC1_pin is defined in Olfactometer_header.h
+  pinMode(BNC1_pin, OUTPUT);
+  digitalWrite(BNC1_pin, LOW);
+
   Serial3.begin(115200);
+
+  activateOdorValve(neutral_valve);
 }
 
 
 void loop() {
-
-  // Act on USB commands (debug only):
   if (DEBUG) readFromUSB();
-
-  // Act on hardware serial commands from maze Teensy:
-  // readFromSerial3();
-
+  readFromSerial3();
+  checkSequenceTimer();
 }
-
 
 
 void blinkLED(int n) {
@@ -55,6 +55,28 @@ void blinkLED(int n) {
     delay(200);
     digitalWrite(LED_BUILTIN, LOW);
     if (i < n-1) delay(200);
+  }
+}
+
+// Quick 50ms hardware TTL pulse for BNC sync
+void pulseBNC() {
+  digitalWrite(BNC1_pin, HIGH);
+  delay(50); 
+  digitalWrite(BNC1_pin, LOW);
+}
+
+void checkSequenceTimer() {
+  if (isSequenceActive) {
+    if (millis() - sequenceStartTime >= SEQUENCE_DURATION) {
+      
+      activateOdorValve(neutral_valve);
+      deactivateOdorValve(odor_valve);
+      pulseBNC();
+
+      isSequenceActive = false;
+      
+      if (DEBUG) Serial.println("15s sequence complete: neutral valve open, odor valve closed.");
+    }
   }
 }
 
@@ -86,10 +108,6 @@ void readFromSerial3() {
 
 void interpretMessage(String message) {
   message.trim();
-  if (DEBUG) {
-    Serial.print("MSG: ");
-    Serial.println(message);
-  }
   int len = message.length();
   if (len==0) {
     if (DEBUG) Serial.println("#"); // "#" means error
@@ -114,6 +132,19 @@ void interpretMessage(String message) {
   }
 
   switch (command) {
+
+    // T: Custom 15-Second Sequence (neutral valve -> odor valve -> neutral valve)
+    case 'T':
+    case 't':
+      activateOdorValve(odor_valve);
+      deactivateOdorValve(neutral_valve);
+      pulseBNC();
+
+      isSequenceActive = true;
+      sequenceStartTime = millis();
+
+      if (DEBUG) Serial.println("Sequence started: odor valve open, neutral valve closed. Waiting 15s...");
+      break;
 
     // D: changes o[D]or stream flow rate (in mLPM)
     case 'D':
