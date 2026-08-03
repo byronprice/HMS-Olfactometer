@@ -23,16 +23,14 @@ const unsigned long valveOnMax  = 3000;  // ms
 unsigned long valveOnDuration  = 2000;
 unsigned long valveOffDuration = 500;
 
-int           blinkCount      = 0;
-bool          ledOn           = false;
-unsigned long lastLEDMillis   = 0;
-const unsigned long blinkInterval = 250;  // ms per on/off phase
-
 
 void setup() {
+
+
   pinMode(LED_BUILTIN, OUTPUT);
 
-  delay(500);  // allow I2C peripherals to power up before scanning
+  blinkLED(2);
+
   randomSeed(micros());
 
   Serial3.begin(115200);
@@ -54,29 +52,26 @@ void setup() {
     Serial.println("Olfactometer Receiver Ready.");
   }
 
+  blinkLED(3);
+
 }
 
 
 void loop() {
+  blinkLED(4);
   readFromSender();
+  blinkLED(5);
   handleValvePulsing();
-  handleLEDBlink();
 }
 
-
-void handleLEDBlink() {
-  if (blinkCount == 0) return;
-  unsigned long now = millis();
-  if (now - lastLEDMillis < blinkInterval) return;
-  lastLEDMillis = now;
-  if (ledOn) {
-    digitalWrite(LED_BUILTIN, LOW);
-    ledOn = false;
-    blinkCount--;
-  } else {
-    digitalWrite(LED_BUILTIN, HIGH);
-    ledOn = true;
+void blinkLED(int n_blinks) {
+  for (int ii = 1; ii<n_blinks+1; ii++) {
+    digitalWrite(LED_BUILTIN, HIGH);  // change state of the LED by setting the pin to the HIGH voltage level
+    delay(250);                      // wait for a second
+    digitalWrite(LED_BUILTIN, LOW);   // change state of the LED by setting the pin to the LOW voltage level
+    delay(250); 
   }
+  delay(750);
 }
 
 
@@ -267,23 +262,8 @@ void interpretMessage(String message) {
       activeBankNumber = -1;
       isValveCurrentlyOpen = false;
       setMFCFlowRate(ODOR_MFC, odor_flow_rate);
-      delay(250);
       // pulseBNC();
       if (DEBUG) Serial.println("START: all blank valves open.");
-      // Blink LED to visually confirm actual MFC flow rate
-      {
-        float measuredFlow = getMFCFlowRate(ODOR_MFC);
-        if (measuredFlow > 0) {
-          blinkCount    = (int)round(measuredFlow);
-          ledOn         = false;
-          lastLEDMillis = millis();
-        }
-        if (DEBUG) {
-          Serial.print("Measured flow rate: ");
-          Serial.print(measuredFlow);
-          Serial.println(" LPM");
-        }
-      }
       break;
 
     case 'S':
