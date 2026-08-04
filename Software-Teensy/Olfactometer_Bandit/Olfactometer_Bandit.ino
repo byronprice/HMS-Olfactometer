@@ -23,6 +23,7 @@ const unsigned long valveOnMax  = 3000;  // ms
 unsigned long valveOnDuration  = 2000;
 unsigned long valveOffDuration = 500;
 
+bool          controlMode     = false;
 int           blinkCount      = 0;
 bool          ledOn           = false;
 unsigned long lastLEDMillis   = 0;
@@ -169,7 +170,7 @@ void interpretMessage(String message) {
 
     case 'Z':
     case 'z': {
-      int targetBank = (int)arg1;
+      int targetBank = controlMode ? (int)random(0, 3) : (int)arg1;
       if (targetBank < 0 || targetBank > 2) break;
 
       // Revert any currently active bank back to its blank
@@ -264,6 +265,7 @@ void interpretMessage(String message) {
         activateOdorValve(bankBlank[i]);
         deactivateOdorValve(bankOdor[i]);
       }
+      controlMode = (arg1 == 1);
       activeBankNumber = -1;
       isValveCurrentlyOpen = false;
       setMFCFlowRate(ODOR_MFC, odor_flow_rate);
