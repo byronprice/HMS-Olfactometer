@@ -11,7 +11,7 @@ const int ODOR_MFC = 1;
 const int bankOdor[3]  = {17, 1, 9};
 const int bankBlank[3] = {18, 2, 10};
 
-const float odor_flow_rate = 4.5;
+const float odor_flow_rate = 3.0;
 
 int activeBankNumber = -1;
 unsigned long previousValveTimer = 0;
