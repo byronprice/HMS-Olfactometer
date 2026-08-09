@@ -266,6 +266,10 @@ void interpretMessage(String message) {
         deactivateOdorValve(bankOdor[i]);
       }
       controlMode = (arg1 == 1);
+      if (DEBUG) {
+        Serial.print("START: all blank valves open. Control mode: ");
+        Serial.println(controlMode ? "ON" : "OFF");
+      }
       activeBankNumber = -1;
       isValveCurrentlyOpen = false;
       setMFCFlowRate(ODOR_MFC, odor_flow_rate);
