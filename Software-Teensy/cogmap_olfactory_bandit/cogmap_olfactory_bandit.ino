@@ -65,6 +65,7 @@ int session_state = 0; // 0 is waiting to start experimental session, 1 is activ
 // reward port probabilities
 int reward_swap = 10; // change reward contingency every 10 trials
 int reward_swap_min = 10;
+int last_swap_trial_count = 0; // trial_count value at the most recent swap
 float reward_swap_geo_mean = 1.0/5.0; // reward swap happens every 10 + geometric(5) trials
 float reward_prob[total_setups] = {0.0,0.0,0.0,0.0,0.0,0.0};
 bool reward_given[total_setups] = {false,false,false,false,false,false};
@@ -234,9 +235,11 @@ void emit_reward() {
 }
 
 void change_reward_contingency() {
-  int remainder = trial_count % reward_swap;
+  int trials_since_swap = trial_count - last_swap_trial_count;
 
-  if (remainder == 0) {
+  if (trials_since_swap >= reward_swap) {
+    last_swap_trial_count = trial_count;
+
     Serial.print("rc,");
     Serial.print(check_time);
     Serial.print(",");
