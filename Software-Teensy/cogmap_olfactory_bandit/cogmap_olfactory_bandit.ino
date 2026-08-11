@@ -77,7 +77,10 @@ float prev_reward_value = 0.9;
 // reward contingency delay
 bool contingency_pause = false;
 unsigned long contingency_pause_start = 0;
-const unsigned long contingency_pause_duration = 10000;
+const unsigned long contingency_pause_duration = 15000;
+const unsigned long mineral_oil_duration = 13000; // how long to sit on mineral oil before revealing new high-reward patch
+bool patch_signal_sent = false;
+int pending_patch_signal = -1;
 
 // camera parameters
 unsigned long prev_camera_time;
@@ -246,6 +249,9 @@ void change_reward_contingency() {
 
     contingency_pause = true;
     contingency_pause_start = millis();
+    patch_signal_sent = false;
+    pending_patch_signal = -1;
+    Serial5.println("M");
 
     int indices[n_reward_pairs];
     for (int i=0; i<n_reward_pairs;i = i+1) {
@@ -270,9 +276,8 @@ void change_reward_contingency() {
         p.second = temp;
       }
 
-      if (indices[i] == 2) { 
-        Serial5.print("z");
-        Serial5.println(i); 
+      if (indices[i] == 2) {
+        pending_patch_signal = i;
       }
 
       reward_prob[reward_prob_index] = p.first;
@@ -294,7 +299,15 @@ void change_reward_contingency() {
 
 void enforce_contingency_pause(){
   if (contingency_pause) {
-    if (check_time - contingency_pause_start >= contingency_pause_duration) {
+    unsigned long elapsed = millis() - contingency_pause_start;
+
+    if ((patch_signal_sent == false) && (elapsed >= mineral_oil_duration) && (pending_patch_signal >= 0)) {
+      Serial5.print("z");
+      Serial5.println(pending_patch_signal);
+      patch_signal_sent = true;
+    }
+
+    if (elapsed >= contingency_pause_duration) {
         contingency_pause = false;
     } else {
         return;
@@ -487,6 +500,7 @@ void interpretCommand(String message) {
     reward_count = 0;
     camera_state = 0;
     trial_count = 0;
+    last_swap_trial_count = -reward_swap;
     prev_camera_time = millis();
     prev_sync_time = millis();
 

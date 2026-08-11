@@ -203,6 +203,22 @@ void interpretMessage(String message) {
       break;
     }
 
+    case 'M':
+    case 'm': {
+      // Mineral oil: revert any active bank back to blank, no odor flowing
+      if (activeBankNumber != -1) {
+        if (isValveCurrentlyOpen) {
+          activateOdorValve(bankBlank[activeBankNumber]);
+          deactivateOdorValve(bankOdor[activeBankNumber]);
+        }
+        activeBankNumber = -1;
+        isValveCurrentlyOpen = false;
+      }
+
+      if (DEBUG) Serial.println("MINERAL OIL: reverted to blank.");
+      break;
+    }
+
     case 'D':
     case 'd':
       setMFCFlowRate(ODOR_MFC, arg1/1000.0);
