@@ -2,19 +2,25 @@
 read data from a photo interrupter (beam break) and use it to
  control a solenoid that allows water to flow (for a water reward)
 
- v2: occasionally double the reward, but only while the mouse is exploiting a
- patch as intended. After poke_threshold consecutive pokes inside the hot patch
- (within a single contingency block), flip a coin; with probability double_prob
- the valve is held open water_multiplier times as long, which delivers roughly
- twice the water (see water_multiplier -- the valve is not proportional). The
- poke count resets on every coin flip, on leaving the patch, and at every
- contingency block transition.
+ v2: occasionally double the reward, but only while the mouse is exploiting the
+ hot patch as intended. The valve is held open water_multiplier times as long,
+ which delivers roughly twice the water (see water_multiplier -- the solenoid is
+ not proportional to open time).
 
- Two columns are appended to the serial log. reward1..6 / catch1..6 keep
- their existing 0/1 meaning:
-   criterion  1 on the trial that reached the poke threshold and flipped the
-              coin, regardless of the coin's outcome. criterion==1 & doubled==0
-              is the matched control for a doubled trial.
+ Eligibility is a VARIABLE-RATIO schedule: it takes poke_threshold consecutive
+ pokes in the hot patch, where poke_threshold is itself redrawn at random after
+ every double and whenever the hot patch switches. See the poke_threshold block
+ for why a fixed threshold is the wrong choice here.
+
+ patch_poke_count resets when the mouse leaves the patch, after each double, and
+ on a hot-patch switch -- but NOT on a block transition that happens to leave the
+ hot patch where it was.
+
+ Two columns are appended to the serial log; reward1..6 / catch1..6 keep their
+ existing 0/1 meaning:
+   pokecount  consecutive pokes in the current patch as of this trial, so every
+              trial carries its exploitation depth. Controls for a doubled trial
+              are non-doubled trials at matched pokecount.
    doubled    1 when this delivery's valve time was actually doubled.
 */
 
@@ -73,8 +79,24 @@ int reward_count = 0;
 int trial_count = 0;
 
 // reward doubling variables
-const int poke_threshold = 10;   // consecutive pokes in the hot patch needed to flip the coin
-const float double_prob = 0.7;   // P(double the reward | threshold reached)
+//
+// VARIABLE-RATIO schedule: the number of consecutive hot-patch pokes required
+// is itself random, redrawn after every double and whenever the hot patch
+// changes. A fixed threshold would be a fixed-ratio schedule -- the most
+// learnable kind -- and the mouse could farm it by lingering in the patch,
+// which would contaminate exactly the patch-residence measures the task exists
+// to measure. A random threshold leaves nothing to count.
+//
+// Calibrated against 43 real sessions of experiment14 behavior. Empirically the
+// mean consecutive hot-patch run is only 2.23 pokes (median 2), so thresholds
+// must live in the 3-8 range: a fixed threshold of 10 fires 0.74x per session
+// with 77% of sessions getting none at all. T = 2 + min(geom(1/2), 6) gives
+// ~11 doubles/session (median 7), with 7% of sessions getting none -- those
+// are the short sessions (~65 trials vs ~330).
+const int poke_threshold_min = 2;
+const float poke_threshold_geo = 1.0/2.0;
+const int poke_threshold_cap = 6;   // T in {3..8}
+int poke_threshold = 4;             // redrawn by draw_poke_threshold()
 // NOT 2.0. The solenoid is affine, not proportional, in open time: it has a
 // fixed opening dead time t0, so V(t) ~ (t - t0) and 2x the open time gives
 // well over 2x the water. Measured in /n/groups/datta/jgrossi/olfactory_maze/
@@ -87,9 +109,9 @@ const float double_prob = 0.7;   // P(double the reward | threshold reached)
 // that range, since m depends on the baseline t.
 const float water_multiplier = 1.7;
 int hot_patch = -1;              // patch currently holding rewardContPairs[hot_pair_index]
-int patch_poke_count = 0;        // consecutive pokes in the current patch, within the current block
-bool double_water[total_setups] = {false,false,false,false,false,false};  // this delivery is doubled
-bool criterion_hit[total_setups] = {false,false,false,false,false,false}; // this trial flipped the coin
+int patch_poke_count = 0;        // consecutive pokes in the current patch
+bool double_water[total_setups] = {false,false,false,false,false,false}; // this delivery is doubled
+int logged_poke_count[total_setups] = {0,0,0,0,0,0}; // count at trial registration, for the log
 
 // debounce, to prevent repeated reward delivery within some window
 unsigned long timeout[total_setups];
@@ -253,17 +275,20 @@ void emit_reward() {
       int cur_patch = i / 2;
       int prev_patch = (prev_reward_port >= 0) ? (prev_reward_port / 2) : -1;
       patch_poke_count = (cur_patch == prev_patch) ? patch_poke_count + 1 : 1;
+      logged_poke_count[i] = patch_poke_count;  // capture before any reset below
 
       bool double_this_trial = false;
-      criterion_hit[i] = false;
-      if ((cur_patch == hot_patch) && (patch_poke_count >= poke_threshold)) {
-        float coin = (float) random(0,100000) / 100000;
-        double_this_trial = (coin <= double_prob);
-        patch_poke_count = 0; // reset on every flip, win or lose
-        criterion_hit[i] = true;
-      }
-
       if ((randomU <= reward_prob[i]) && (reward_count < max_rewards)) {
+        // water IS being delivered on this trial, so now decide whether to
+        // double it. deciding here rather than above means the threshold is
+        // only ever spent on a trial that actually delivers water -- an
+        // unlucky catch no longer burns a run the mouse earned, and it also
+        // stops the schedule idling once the daily water cap is reached.
+        if ((cur_patch == hot_patch) && (patch_poke_count >= poke_threshold)) {
+          double_this_trial = true;
+          patch_poke_count = 0;
+          draw_poke_threshold();
+        }
         digitalWrite(waterPins[i], HIGH);
         reward_given[i] = true;
         double_water[i] = double_this_trial;
@@ -300,22 +325,29 @@ void emit_reward() {
         digitalWrite(waterPins[i], LOW);
         give_water[i] = false;
 
-        int criterion_flag = (criterion_hit[i] == true) ? 1 : 0;
         int double_flag = (double_water[i] == true) ? 1 : 0;
 
         if (reward_given[i] == true) {
           //reward
-          print_to_serial(check_time,-1,i,-1,0,0,criterion_flag,double_flag);
+          print_to_serial(check_time,-1,i,-1,0,0,logged_poke_count[i],double_flag);
         } else {
           //catch
-          print_to_serial(check_time,-1,-1,i,0,0,criterion_flag,double_flag);
+          print_to_serial(check_time,-1,-1,i,0,0,logged_poke_count[i],double_flag);
         }
         reward_given[i] = false;
         double_water[i] = false;
-        criterion_hit[i] = false;
+        logged_poke_count[i] = 0;
       }
     }
   }
+}
+
+// consecutive hot-patch pokes required for the next double. same geometric
+// idiom the block length uses, so T = poke_threshold_min + min(geom, cap).
+void draw_poke_threshold() {
+  float u = random(1, 100000) / 100000.0;
+  int x = ceil(log(1 - u) / log(1 - poke_threshold_geo));
+  poke_threshold = poke_threshold_min + min(x, poke_threshold_cap);
 }
 
 void change_reward_contingency() {
@@ -323,7 +355,6 @@ void change_reward_contingency() {
 
   if (trials_since_swap >= reward_swap) {
     last_swap_trial_count = trial_count;
-    patch_poke_count = 0; // a poke run cannot span a block transition
 
     Serial.print("rc,");
     Serial.print(check_time);
@@ -360,6 +391,14 @@ void change_reward_contingency() {
 
       if (indices[i] == hot_pair_index) {
         pending_patch_signal = i;
+        // reset the doubling schedule only on a real hot-patch SWITCH. the
+        // shuffle can land the hot pair back on the same patch (~1/3 of blocks,
+        // 36% observed), and in that case the mouse's run is genuinely
+        // continuous, so there is nothing to reset.
+        if (i != hot_patch) {
+          patch_poke_count = 0;
+          draw_poke_threshold();
+        }
         hot_patch = i;
       }
 
@@ -445,7 +484,7 @@ void sync_pulse(int send_serial, unsigned long current_time){
   }
 }
 
-void print_to_serial(unsigned long timestamp, int beam_break_setup, int reward_setup, int catch_setup, int camera_frame, int sync, int criterion, int doubled) {
+void print_to_serial(unsigned long timestamp, int beam_break_setup, int reward_setup, int catch_setup, int camera_frame, int sync, int pokecount, int doubled) {
   Serial.print(timestamp);
   Serial.print(",");
   Serial.print(camera_frame);
@@ -475,7 +514,7 @@ void print_to_serial(unsigned long timestamp, int beam_break_setup, int reward_s
     }
   }
   Serial.print(",");
-  Serial.print(criterion);
+  Serial.print(pokecount);
   Serial.print(",");
   Serial.print(doubled);
   Serial.println();
@@ -580,7 +619,7 @@ void interpretCommand(String message) {
         Serial.print(",");
       }
     }
-    Serial.print(",criterion,doubled");
+    Serial.print(",pokecount,doubled");
     Serial.println();
 
     prime_ports();
@@ -594,9 +633,10 @@ void interpretCommand(String message) {
 
     patch_poke_count = 0;
     hot_patch = -1;
+    draw_poke_threshold();
     for (int i = 0; i < total_setups; i = i+1) {
       double_water[i] = false;
-      criterion_hit[i] = false;
+      logged_poke_count[i] = 0;
     }
 
     print_to_serial(prev_camera_time,-1,-1,-1,0,0,0,0);
@@ -643,7 +683,7 @@ void interpretCommand(String message) {
     for (int i = 0; i < total_setups; i = i+1) {
       digitalWrite(waterPins[i], LOW);
       double_water[i] = false;
-      criterion_hit[i] = false;
+      logged_poke_count[i] = 0;
     }
     patch_poke_count = 0;
 
