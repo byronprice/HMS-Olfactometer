@@ -528,7 +528,7 @@ void interpretCommand(String message) {
       digitalWrite(waterPins[port], HIGH);
       delay(args[1]);
       digitalWrite(waterPins[port], LOW);
-      delay(10);
+      delay(100);
       count = count + 1;
     }
 

@@ -45,9 +45,9 @@ struct Pair {
 
 const int n_reward_pairs = 3;
 Pair rewardContPairs[n_reward_pairs] = {
-  {0.1,0.1},
-  {0.1,0.1},
-  {0.9,0.9}
+  {0.0,0.0},
+  {0.0,0.0},
+  {0.95,0.95}
 };
 // Pair rewardContPairs[n_reward_pairs] = {
 //   {0.3,0.3},
@@ -63,6 +63,23 @@ Pair rewardContPairs[n_reward_pairs] = {
 // meaningful while exactly one pair is the high-rate one -- if the 6-pair
 // asymmetric config above is restored, the reward doubling gate needs revisiting.
 const int hot_pair_index = n_reward_pairs - 1;
+
+// change_reward_contingency() shuffles all n_reward_pairs but its assignment
+// loop only reads indices[0 .. n_patches-1]. If there are more pairs than
+// patches, hot_pair_index is dealt to a patch only n_patches/n_reward_pairs of
+// the time; on the other blocks the `indices[i] == hot_pair_index` test never
+// fires, so pending_patch_signal stays -1 (no odor reveal is sent, the
+// olfactometer sits on mineral oil for the whole block) and hot_patch silently
+// keeps its value from the PREVIOUS block, pointing the reward-doubling gate at
+// the wrong patch. Both failures are invisible in the logs. This is currently
+// safe (3 pairs, 3 patches) and this assert keeps it that way -- it trips if the
+// 6-pair config above is uncommented, or if total_setups changes (n_patches is
+// derived from it, so a 4-port maze would give 2 patches and break this too).
+static_assert(n_reward_pairs <= n_patches,
+              "more reward pairs than patches: hot_pair_index would not be dealt "
+              "every block, leaving hot_patch stale and suppressing the odor "
+              "reveal. Derive the hot patch from the assigned probabilities "
+              "instead of from a fixed index -- see the note above.");
 
 // beam break variables
 bool beam_state[total_setups] = {false,false,false,false,false,false};
@@ -93,9 +110,9 @@ int trial_count = 0;
 // with 77% of sessions getting none at all. T = 2 + min(geom(1/2), 6) gives
 // ~11 doubles/session (median 7), with 7% of sessions getting none -- those
 // are the short sessions (~65 trials vs ~330).
-const int poke_threshold_min = 2;
+const int poke_threshold_min = 3;
 const float poke_threshold_geo = 1.0/2.0;
-const int poke_threshold_cap = 6;   // T in {3..8}
+const int poke_threshold_cap = 10;   // T in {3..8}
 int poke_threshold = 4;             // redrawn by draw_poke_threshold()
 // NOT 2.0. The solenoid is affine, not proportional, in open time: it has a
 // fixed opening dead time t0, so V(t) ~ (t - t0) and 2x the open time gives
@@ -139,8 +156,8 @@ float prev_reward_value = 0.9;
 // reward contingency delay
 bool contingency_pause = false;
 unsigned long contingency_pause_start = 0;
-const unsigned long contingency_pause_duration = 15000;
-const unsigned long mineral_oil_duration = 13000; // how long to sit on mineral oil before revealing new high-reward patch
+const unsigned long contingency_pause_duration = 3000;
+const unsigned long mineral_oil_duration = 2000; // how long to sit on mineral oil before revealing new high-reward patch
 bool patch_signal_sent = false;
 int pending_patch_signal = -1;
 
@@ -278,7 +295,11 @@ void emit_reward() {
       logged_poke_count[i] = patch_poke_count;  // capture before any reset below
 
       bool double_this_trial = false;
-      if ((randomU <= reward_prob[i]) && (reward_count < max_rewards)) {
+      // strictly less-than: random(0,100000) can return 0, so randomU can be
+      // exactly 0.0 and "<=" would pay out 1 trial in 100000 at a port whose
+      // probability is 0.0. with "<" a 0.0 pair is truly never rewarded, and a
+      // 0.95 pair is exactly 0.95 rather than 0.95001.
+      if ((randomU < reward_prob[i]) && (reward_count < max_rewards)) {
         // water IS being delivered on this trial, so now decide whether to
         // double it. deciding here rather than above means the threshold is
         // only ever spent on a trial that actually delivers water -- an
@@ -356,15 +377,16 @@ void change_reward_contingency() {
   if (trials_since_swap >= reward_swap) {
     last_swap_trial_count = trial_count;
 
+    check_time = millis();
     Serial.print("rc,");
     Serial.print(check_time);
     Serial.print(",");
 
-    contingency_pause = true;
-    contingency_pause_start = millis();
-    patch_signal_sent = false;
-    pending_patch_signal = -1;
-    Serial5.println("M");
+    // NB: the pause and the olfactometer handoff are NOT started here -- we do
+    // not yet know which patch the shuffle will hand the hot pair to. Both are
+    // decided after the assignment loop below, once new_hot is known.
+    int prev_hot = hot_patch;
+    int new_hot = -1;
 
     int indices[n_reward_pairs];
     for (int i=0; i<n_reward_pairs;i = i+1) {
@@ -390,16 +412,7 @@ void change_reward_contingency() {
       }
 
       if (indices[i] == hot_pair_index) {
-        pending_patch_signal = i;
-        // reset the doubling schedule only on a real hot-patch SWITCH. the
-        // shuffle can land the hot pair back on the same patch (~1/3 of blocks,
-        // 36% observed), and in that case the mouse's run is genuinely
-        // continuous, so there is nothing to reset.
-        if (i != hot_patch) {
-          patch_poke_count = 0;
-          draw_poke_threshold();
-        }
-        hot_patch = i;
+        new_hot = i;
       }
 
       reward_prob[reward_prob_index] = p.first;
@@ -413,6 +426,32 @@ void change_reward_contingency() {
       reward_prob_index = reward_prob_index + 1;
     }
     Serial.println();
+    hot_patch = new_hot;
+
+    // Everything that interrupts the session happens ONLY when the hot patch
+    // actually moved. The shuffle hands it back to the same patch ~1/3 of blocks
+    // (36% observed); with the current pair config -- {0,0},{0,0},{0.95,0.95} --
+    // the two cold pairs are identical, so a same-patch swap leaves every port's
+    // probability exactly as it was. There is nothing for the mouse to relearn
+    // and nothing new to smell, so pausing and re-cueing the odor would be pure
+    // dead time. The run also continues uninterrupted, so the doubling counter
+    // and threshold carry over rather than resetting.
+    //
+    // WARNING: this shortcut assumes the non-hot pairs are interchangeable. If
+    // the two cold pairs are ever given DIFFERENT values, a same-hot-patch swap
+    // still reshuffles them between the cold patches -- a real contingency
+    // change that this would skip the pause and the odor re-cue for.
+    if (new_hot != prev_hot) {
+      patch_poke_count = 0;
+      draw_poke_threshold();
+
+      contingency_pause = true;
+      contingency_pause_start = millis();
+      patch_signal_sent = false;
+      pending_patch_signal = new_hot;
+      Serial5.println("M");
+    }
+
     float u = random(1, 100000) / 100000.0;
     int x = ceil(log(1 - u) / log(1 - reward_swap_geo_mean));
     reward_swap = reward_swap_min + min(x, 30);
@@ -599,6 +638,14 @@ void interpretCommand(String message) {
 
   // S: start session
   if ((command == 'S') || (command == 's')) {
+    // seed from the microsecond clock at the moment the experimenter starts the
+    // session. without this the Teensy replays one fixed random stream from
+    // every power-up/reflash, so the hot-patch sequence, the reward draws and
+    // the doubling thresholds repeat across sessions and sessions are not
+    // independent samples. must happen before draw_poke_threshold() and the
+    // first change_reward_contingency() below, which both consume random().
+    randomSeed(micros());
+
     session_state = 1;
     Serial.print("timestamp,");
     Serial.print("camera_frame,");
@@ -631,9 +678,13 @@ void interpretCommand(String message) {
     prev_camera_time = millis();
     prev_sync_time = millis();
 
+    // no draw_poke_threshold() here on purpose. hot_patch = -1 makes the first
+    // block count as a hot-patch switch, so change_reward_contingency() below
+    // (which always fires, since last_swap_trial_count = -reward_swap) draws the
+    // threshold itself. drawing here too would be dead -- immediately
+    // overwritten -- and would burn a random() call, shifting the stream.
     patch_poke_count = 0;
     hot_patch = -1;
-    draw_poke_threshold();
     for (int i = 0; i < total_setups; i = i+1) {
       double_water[i] = false;
       logged_poke_count[i] = 0;
@@ -663,7 +714,7 @@ void interpretCommand(String message) {
       digitalWrite(waterPins[port], HIGH);
       delay(args[1]);
       digitalWrite(waterPins[port], LOW);
-      delay(10);
+      delay(100);
       count = count + 1;
     }
 
