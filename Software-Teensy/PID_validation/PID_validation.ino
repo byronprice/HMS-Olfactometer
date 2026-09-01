@@ -13,7 +13,7 @@ const int ODOR_MFC = 1;
 
 bool isSequenceActive = false;
 unsigned long sequenceStartTime = 0;
-const unsigned long SEQUENCE_DURATION = 15000;
+const unsigned long SEQUENCE_DURATION = 7500;
 
 const int odor_valve = 1;
 const int neutral_valve = 2;
@@ -136,6 +136,7 @@ void interpretMessage(String message) {
     // T: Custom 15-Second Sequence (neutral valve -> odor valve -> neutral valve)
     case 'T':
     case 't':
+      delay(60*1000);
       activateOdorValve(odor_valve);
       deactivateOdorValve(neutral_valve);
       pulseBNC();
